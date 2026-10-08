@@ -20,9 +20,16 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { z } from "zod";
 import { authClient } from "@/lib/auth-client";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
+import { Loader2 } from "lucide-react";
 
 export default function SignUpPage() {
-  const form = useForm({
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+
+  const form = useForm<z.infer<typeof signUpSchema>>({
     resolver: zodResolver(signUpSchema),
     defaultValues: {
       email: "",
@@ -31,18 +38,25 @@ export default function SignUpPage() {
     },
   });
 
-  async function onSubmit(data: z.infer<typeof signUpSchema>) {
-    console.log("submitting", data);
-    const { error } = await authClient.signUp.email({
-      email: data.email,
-      password: data.password,
-      name: data.name,
+  function onSubmit(data: z.infer<typeof signUpSchema>) {
+    startTransition(async () => {
+      await authClient.signUp.email(
+        {
+          email: data.email,
+          password: data.password,
+          name: data.name,
+        },
+        {
+          onSuccess: () => {
+            toast.success("Account created successfully");
+            router.push("/");
+          },
+          onError: (error: { error: { message?: string } }) => {
+            toast.error(error.error.message ?? "Sign up failed");
+          },
+        }
+      );
     });
-    if (error) {
-      alert(error.message ?? "Sign up failed");
-      return;
-    }
-    alert("Signed up!");
   }
 
   return (
@@ -52,11 +66,7 @@ export default function SignUpPage() {
         <CardDescription>Create an account to get started</CardDescription>
       </CardHeader>
       <CardContent>
-        <form
-          onSubmit={form.handleSubmit(onSubmit, (errors) =>
-            console.log("invalid", errors)
-          )}
-        >
+        <form onSubmit={form.handleSubmit(onSubmit)}>
           <FieldGroup className="gap-y-4">
             <Controller
               name="name"
@@ -114,7 +124,16 @@ export default function SignUpPage() {
               )}
             />
 
-            <Button type="submit">Sign up</Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Loading...</span>
+                </>
+              ) : (
+                <span>Sign up</span>
+              )}
+            </Button>
           </FieldGroup>
         </form>
       </CardContent>
